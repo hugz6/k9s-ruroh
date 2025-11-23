@@ -5,6 +5,10 @@ package dialog
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/derailed/k9s/internal/config"
@@ -15,6 +19,9 @@ import (
 
 // ShowError pops an error dialog.
 func ShowError(styles *config.Dialog, pages *ui.Pages, msg string) {
+	// Play error sound
+	playErrorSound()
+
 	f := tview.NewForm()
 	f.SetItemPadding(0)
 	f.SetButtonsAlign(tview.AlignCenter).
@@ -55,4 +62,38 @@ var cow = []string{
 	`    (__)\       )\/\`,
 	`        ||----w |   `,
 	`        ||     ||   `,
+}
+
+// playErrorSound plays a sound when an error occurs.
+func playErrorSound() {
+	go func() {
+		soundPath := getSoundFilePath()
+
+		if soundPath != "" {
+			if err := exec.Command("paplay", soundPath).Run(); err == nil {
+				return
+			}
+		}
+
+		slog.Debug("Unable to play error sound - paplay audio backend unavailable.")
+	}()
+}
+
+// getSoundFilePath returns the path to the ruroh.wav sound file.
+// It checks in order: ~/.config/k9s/ruroh.wav, then $HOME/k9s/ruroh.wav
+func getSoundFilePath() string {
+	// Try ~/.config/k9s/ruroh.wav
+	if home := os.Getenv("HOME"); home != "" {
+		path := filepath.Join(home, ".config", "k9s", "ruroh.wav")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+
+		path = filepath.Join(home, "k9s", "ruroh.wav")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
 }
