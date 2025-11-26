@@ -47,3 +47,20 @@ jobs:
           }
 
           git push https://oauth2:${{ secrets.WORKFLOW_TOKEN }}@github.com/${{ github.repository }} feat-ruroh --force
+
+      - name: Tag new version if needed
+        run: |
+          git fetch upstream --tags
+          UPSTREAM_TAG=$(git describe --tags --abbrev=0 upstream/master)
+
+          MY_TAG="${UPSTREAM_TAG}-ruroh"
+          echo "Last k9s version : $UPSTREAM_TAG"
+          echo "Wanted version : $MY_TAG"
+
+          if git rev-parse "$MY_TAG" >/dev/null 2>&1; then
+          echo "Tag $MY_TAG exist. Nothing to do."
+          else
+          echo "Create new tag $MY_TAG on feat-ruroh..."
+          git tag $MY_TAG
+          git push https://oauth2:${{ secrets.WORKFLOW_TOKEN }}@github.com/${{ github.repository }} $MY_TAG
+          fi
