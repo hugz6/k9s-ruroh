@@ -1,13 +1,10 @@
 name: Sync Fork (Auto)
-
 on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch: {}
-
 permissions:
   contents: write
-
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -15,52 +12,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
           fetch-depth: 0
 
-      - name: Configure Git Identity
+      - name: Configure Git
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/derailed/k9s.git || true
-          git fetch upstream
+          git fetch upstream --tags --prune
 
       - name: Sync main
         run: |
-          git checkout main || git checkout -b main
+          git checkout -B main
           git reset --hard upstream/master
+          git push origin main --force
 
-          git push https://oauth2:${{ secrets.WORKFLOW_TOKEN }}@github.com/${{ github.repository }} main --force
-
-      - name: Rebase and Push feat-ruroh
+      - name: Rebase and push feat-ruroh
         run: |
           git checkout feat-ruroh
-
-          # Rebase
           git rebase main || {
-            echo "::error::Rebase failed! Manual conflict resolution required."
             git rebase --abort
+            echo "::error::Rebase failed, manual conflict resolution required."
             exit 1
           }
-
-          git push https://oauth2:${{ secrets.WORKFLOW_TOKEN }}@github.com/${{ github.repository }} feat-ruroh --force
+          git push origin feat-ruroh --force-with-lease
 
       - name: Tag new version if needed
         run: |
-          git fetch upstream --tags
           UPSTREAM_TAG=$(git describe --tags --abbrev=0 upstream/master)
-
           MY_TAG="${UPSTREAM_TAG}-ruroh"
-          echo "Last k9s version : $UPSTREAM_TAG"
-          echo "Wanted version : $MY_TAG"
-
-          if git rev-parse "$MY_TAG" >/dev/null 2>&1; then
-          echo "Tag $MY_TAG exist. Nothing to do."
+          echo "Upstream: ${UPSTREAM_TAG} -> mine: ${MY_TAG}"
+          if git rev-parse -q --verify "refs/tags/${MY_TAG}" >/dev/null; then
+            echo "Tag ${MY_TAG} already exists, nothing to do."
           else
-          echo "Create new tag $MY_TAG on feat-ruroh..."
-          git tag $MY_TAG
-          git push https://oauth2:${{ secrets.WORKFLOW_TOKEN }}@github.com/${{ github.repository }} $MY_TAG
+            git tag "$MY_TAG"
+            git push origin "$MY_TAG"
           fi
